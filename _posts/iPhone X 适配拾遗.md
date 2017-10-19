@@ -1,0 +1,67 @@
+#iPhone X 适配拾遗
+
+##目标
+* 对工程进行最简单适配，应用在iPhone机型上不出现界面异常，能够正常使用，并不兼容任何系统新特性
+
+##开始适配
+### 启动页面上下黑边问题
+如果你的工程没有做过任何iPhone X相关的适配工作，在iPhone X中被打开的时候会出现上下的黑边，大概如下图
+![](http://blog-1254540326.cosbj.myqcloud.com/img/Simulator%20Screen%20Shot%20-%20iPhone%20X%20-%202017-10-18%20at%2016.51.04.png)
+
+* 这是由于没有配置iPhone X相对应的启动图片导致的
+* 如果没有配置机型相关的启动图，视为没有做过相关机型的适配， iPhone则会启动兼容模式运行APP，对界面进行等比缩放显示（每一代iPhone新机型都如此）
+* 扔一张启动图到Assets.xcassets即可解决问题，分辨率1125px × 2436px
+* 如果你的工程使用xib或者storyboard进行配置启动图，则无视以上所有
+
+### UINavigationController和UITabBarController
+* 大部分应用目前都使用的UINavigationController和UITabBarController混合架构，基本上适配只需要搞定UINavigationBar和UITabBar即可
+* 在很长的一段时间，UINavigationBar的高度64和UITabBar的高度49是被iOS开发人员当做一个常量来使用的，在iPhone X中，这种情况将被改变，可以使用以下定义代替
+
+```objc
+#ifndef NavBarHeight
+#define NavBarHeight               44.f
+#endif
+#ifndef StatusBarHeight
+#define StatusBarHeight            (ISIPHONEX ? 44.f : 20.f)
+#endif
+#ifndef NavAndStatusHeight
+#define NavAndStatusHeight         (ISIPHONEX ? 88.f : 64.f)
+#endif
+#ifndef TabBarHeight
+#define TabBarHeight               49.f
+#endif
+#ifndef TabBarBottomHeight
+#define TabBarBottomHeight         (ISIPHONEX ? 34.f : 0.f)
+#endif
+#ifndef TabBarAndBottomHeight
+#define TabBarAndBottomHeight      (ISIPHONEX ? 49.f+34.f : 49.f)
+#endif
+#ifndef ISIPHONEX
+#define ISIPHONEX ([UIScreen instancesRespondToSelector:@selector(currentMode)] ? CGSizeEqualToSize(CGSizeMake(1125, 2436), [[UIScreen mainScreen] currentMode].size) : NO)
+#endif
+```
+* 无论是在Bar上面加了控件还是完全自定义了NavgationBar和UITabBar，根据相应的高度做好适配即可不再赘述。
+
+###hidesBottomBarWhenPushed
+
+当首页与二级页面切换时，往往会需要将hidesBottomBarWhenPushed这个属性设置为YES,在iPhone X中会导致UITabbar在push的过程中向上跳跃，大概如下图
+![](http://blog-1254540326.cosbj.myqcloud.com/img/Simulator%20Screen%20Shot%20-%20iPhone%20X%20-%202017-10-18%20at%2017.56.44.png)
+
+解决方案是在页面Push之后立即对tabbar的frame属性进行修改，代码如下
+
+```objc
+	UIViewController *viewController =[[UIViewController alloc]init];
+    viewController.hidesBottomBarWhenPushed = YES;
+    [self.navigationController pushViewController:viewController animated:YES];
+    if (ISIPHONEX&&!self.tabBarController.tabBar.hidden) {
+        CGRect frame = self.tabBarController.tabBar.frame;
+        frame.origin.y = [UIScreen mainScreen].bounds.size.height - frame.size.height;
+        self.tabBarController.tabBar.frame = frame;
+    }
+```
+
+当然能够将以上代码整合到一起来写就更好了，方法包括但不限于使用子类，runtime等等。
+
+###关于相对布局与Masonry
+
+我们经常会在tabbar上面添加一些自定义的小控件（按钮，红点，角标等等），切记在添加这些控件的过程中，避免使用到相对布局和Masonry，使用相对布局和Masonry会导致页面在从二级页面向首页Pop的时候，tabbar的出现跳动，tabbar总是会先变成49的高度，在整个页面跳转完成之后，才会变成iPhone X里的83，目前没有发现有效的解决方案，会持续关注。
